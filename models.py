@@ -18,34 +18,76 @@ NORMAL_OPERATOR_SALARY_HOUR = 1200.00
 Base = declarative_base()
 
 
-class Status(enum.Enum):
-    """Template for accept restricts strings"""
+class AccountRole(enum.Enum):
+    """Role for account acess levels"""
 
     ADMINISTRATOR = "administrator"
     MANAGER = "manager"
-    OPERATOR = "operator"
 
 
-class User(Base):
-    """Template for user creation"""
+class Employee(Base):
+    """Employee table template for creation of employees"""
 
-    __tablename__ = "users"
+    __tablename__ = "employees"
     id = Column(Integer, primary_key=True, index=True)
-    name_user = Column(String, nullable=False, unique=False, index=True)
-    password_user = Column(String, nullable=True)
-    role_user = Column(Enum(Status))
-    my_number = Column(Integer, nullable=False, unique=True)
+    full_name = Column(String(100), nullable=False, index=True)
+    phone = Column(String(20), nullable=True)
+    address = Column(String(255), nullable=True)
+    hired_at = Column(DateTime(timezone=True), nullable=False)
     is_active = Column(Boolean, nullable=False, default=True)
-    manager_department_relationship = relationship(
-        "Department", back_populates="manager_relationship"
+
+    account_relationship = relationship(
+        "Account",
+        back_populates="employee_relationship",
+        uselist=False,
     )
-    employee_timerecord_relationship = relationship(
-        "TimeRecord", back_populates="employee_relationship"
+
+    card_relationship = relationship(
+        "Card",
+        back_populates="employee_relationship",
     )
-    payment_relationship = relationship(
-        "MonthlyPayroll", back_populates="user_payment_relationship"
+
+    time_records_relationship = relationship(
+        "TimeRecord",
+        back_populates="employee_relationship",
     )
-    card_relationship = relationship("Card", back_populates="user_card_relationship")
+
+    payroll_relationship = relationship(
+        "MonthlyPayroll",
+        back_populates="employee_payment_relationship",
+    )
+    managed_department = relationship("Department", back_populates="manager")
+
+
+class Account(Base):
+    """Account to access the system, linked to an employee"""
+
+    __tablename__ = "accounts"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    employee_id = Column(
+        Integer,
+        ForeignKey("employees.id"),
+        nullable=False,
+        unique=True,
+    )
+
+    username = Column(
+        String(50),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
+    password_hash = Column(String, nullable=False)
+    role = Column(Enum(AccountRole), nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True)
+
+    employee_relationship = relationship(
+        "Employee",
+        back_populates="account_relationship",
+    )
 
 
 class Department(Base):
@@ -53,12 +95,12 @@ class Department(Base):
 
     __tablename__ = "departments"
     id = Column(Integer, primary_key=True, index=True)
-    users_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    employees_id = Column(
+        Integer, ForeignKey("employees.id"), nullable=False, index=True
+    )
     department_title = Column(String, nullable=False)
     department_removed = Column(Boolean, default=False)
-    manager_relationship = relationship(
-        "User", back_populates="manager_department_relationship"
-    )
+    manager = relationship("Employee", back_populates="managed_department")
     inventory_relationship = relationship(
         "CurrentInventory", back_populates="department_relationship"
     )
@@ -72,13 +114,13 @@ class TimeRecord(Base):
         Integer,
         primary_key=True,
     )
-    users_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    employees_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
 
     clock_in = Column(DateTime, nullable=False)
     clock_out = Column(DateTime, nullable=True)
     hour_worked = Column(Float, nullable=True)
     employee_relationship = relationship(
-        "User", back_populates="employee_timerecord_relationship"
+        "Employee", back_populates="time_records_relationship"
     )
 
 
@@ -87,13 +129,13 @@ class MonthlyPayroll(Base):
 
     __tablename__ = "monthly_payroll"
     id = Column(Integer, primary_key=True, index=True)
-    users_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    employees_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
     datetime_payment = Column(DateTime, nullable=False)
     base_salary = Column(Float, nullable=False)
     overtime_pay = Column(Float, nullable=False)
     tax_deductions = Column(Float, nullable=False)
-    user_payment_relationship = relationship(
-        "User", back_populates="payment_relationship"
+    employee_payment_relationship = relationship(
+        "Employee", back_populates="payment_relationship"
     )
 
 
@@ -146,8 +188,16 @@ class Card(Base):
     id = Column(Integer, primary_key=True, index=True)
     card_number = Column(String, nullable=False, unique=True)
     card_status = Column(Boolean, default=True)
-    users_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    user_card_relationship = relationship("User", back_populates="card_relationship")
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    issued_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    disabled_at = Column(DateTime(timezone=True), nullable=True)
+    user_card_relationship = relationship(
+        "Employee", back_populates="card_relationship"
+    )
 
 
 class InventoryMovement(Base):

@@ -3,7 +3,7 @@
 from typing import Literal
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ManagerAdministratorValidation(BaseModel):
@@ -11,12 +11,17 @@ class ManagerAdministratorValidation(BaseModel):
 
     name_user: str = Field(min_length=3, max_length=50)
     password_user: str = Field(min_length=8, max_length=50)
-    my_number: str = Field(
-        min_length=12,
-        max_length=12,
-        pattern=r"^\d{12}$",
-        description="Japanese My Number: exactly 12 numeric digits",
+    username: str = Field(
+        min_length=3,
+        max_length=30,
+        pattern=r"^[a-zA-Z0-9_.-]+$",
     )
+
+    @field_validator("username", mode="before")
+    @classmethod
+    def normalize_username(cls, value: str):
+        """returns the username in lowercase andd whitout whitespaces"""
+        return value.strip().lower()
 
 
 class OperatorValidation(BaseModel):
@@ -24,12 +29,17 @@ class OperatorValidation(BaseModel):
 
     name_user: str = Field(min_length=3, max_length=50)
     password_user: str = Field(min_length=8, max_length=50)
-    my_number: str = Field(
-        min_length=12,
-        max_length=12,
-        pattern=r"^\d{12}$",
-        description="Japanese My Number: exactly 12 numeric digits",
+    username: str = Field(
+        min_length=3,
+        max_length=30,
+        pattern=r"^[a-zA-Z0-9_.-]+$",
     )
+
+    @field_validator("username", mode="before")
+    @classmethod
+    def normalize_username(cls, value: str):
+        """returns the username in lowercase andd whitout whitespaces"""
+        return value.strip().lower
 
 
 class DepartmentValidation(BaseModel):
