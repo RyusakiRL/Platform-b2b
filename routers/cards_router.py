@@ -21,7 +21,7 @@ def create_card(
     )
 
 
-@router.post("/disable/{card_id}")
+@router.patch("/disable/{card_id}")
 def disable_card(card_id: int, login_confirmation: int, db: Session = Depends(get_db)):
     """Endpoint to disable a card for a user."""
     return card_disable(card_id=card_id, login_confirmation=login_confirmation, db=db)

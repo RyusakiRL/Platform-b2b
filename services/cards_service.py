@@ -8,10 +8,10 @@ from schemas import CardValidation
 
 
 def card_creation(
-    card_validation: CardValidation, login_confirmation: int, db: Session
+    card_validation: CardValidation, db: Session
 ):
     """Allow a manager to create a card"""
-    creator = db.query(User).filter(User.my_number == login_confirmation).first()
+    creator = db.query(User).filter(User).first()
     if not creator or creator.is_active is False:
         raise HTTPException(status_code=404, detail="User not found or inactive.")
     card_user = db.query(User).filter(User.id == card_validation.users_id).first()
