@@ -56,10 +56,6 @@ class MonthlyPayroll(Base):
     reference_month = Column(Integer, nullable=False)
     employee = relationship("Employee", back_populates="payrolls")
     __table_args__ = (
-        CheckConstraint(
-            "reference_month BETWEEN 1 AND 12",
-            name="ck_payroll_valid_month",
-        ),
         UniqueConstraint(
             "employee_id",
             "reference_year",
