@@ -46,7 +46,7 @@ def create_token_jwt(data: dict):
     return encoded_token
 
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
 def verify_token(token: str = Depends(oauth2_scheme)):
