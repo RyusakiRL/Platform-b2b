@@ -2,21 +2,24 @@
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
-from models import User
+from starlette.status import HTTP_403_FORBIDDEN, HTTP_401_UNAUTHORIZED
+
+from models.workforce import Account
 from security import verify_password, create_token_jwt
 
 
 def login(db: Session, username: str, password: str):
     """Login in system and return the token"""
-    existence = db.query(User).filter(User.name_user == username).first()
-    if not existence:
-        raise HTTPException(status_code=404, detail="Invalid credential")
-    verified_password = verify_password(password, existence.password_user)
-    if not verified_password:
-        raise HTTPException(status_code=400, detail="Invalid credential")
-    if existence.is_active is False:
+    account = db.query(Account).filter(Account.username == username).first()
+    if not account or not verify_password(password, account.password):
         raise HTTPException(
-            status_code=403, detail="Access denied: user is not active on plataform"
+            status_code=HTTP_401_UNAUTHORIZED, detail="Invalid credential"
         )
-    token = create_token_jwt({"sub": existence.my_number})
+
+    if not account.is_active:
+        raise HTTPException(
+            status_code=HTTP_403_FORBIDDEN, detail="Account is inactive"
+        )
+
+    token = create_token_jwt({"sub": str(account.id)})
     return {"access_token": token, "token_type": "bearer"}
