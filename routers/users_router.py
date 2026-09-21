@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from database import get_db
 from schemas import EmployeeValidation, AccountValidation
-from models import Account
+from models.workforce import Account
 from dependencies import get_current_account
 from services.users_service import (
     create_employee,

@@ -1,11 +1,12 @@
 """Module responsible for security, encryption, and JWT token generation."""
 
 from datetime import datetime, timedelta, timezone
+import os
 from passlib.context import CryptContext
 from jose import jwt, JWTError
 from fastapi.security import OAuth2PasswordBearer
 from fastapi import Depends, HTTPException, status
-import os
+
 from dotenv import load_dotenv
 
 load_dotenv()
