@@ -1,142 +1,144 @@
 """General user service module for managing user creation and demission."""
 
+from datetime import datetime, timezone
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
-from models import User, Status
-from schemas import OperatorValidation, ManagerAdministratorValidation
+from starlette.status import (
+    HTTP_403_FORBIDDEN,
+    HTTP_400_BAD_REQUEST,
+    HTTP_404_NOT_FOUND,
+)
+from models.workforce import Employee, Account
+from models.enums import AccountRole
+from schemas import EmployeeValidation, AccountValidation
 from security import generator_hash_password
 
 
-def create_employee(operator: OperatorValidation, login_confirmation: int, db: Session):
+def create_employee(
+    employee: EmployeeValidation, current_account: Account, db: Session
+):
     """Allow a manager to create a employee"""
-    my_number_validation_manager = (
-        db.query(User).filter(User.my_number == login_confirmation).first()
-    )
-    if not my_number_validation_manager:
-        raise HTTPException(status_code=404, detail="manager not found")
-    if my_number_validation_manager.role_user != Status.MANAGER:
+    if not current_account.is_active or current_account.role not in [
+        AccountRole.MANAGER,
+        AccountRole.ADMINISTRATOR,
+    ]:
         raise HTTPException(
-            status_code=403,
-            detail="Access denied: only manager can create operator on plataform",
+            status_code=HTTP_403_FORBIDDEN,
+            detail="Access denied: only activemanager or administrator can create employees.",
         )
-    operator_existence = (
-        db.query(User).filter(User.my_number == operator.my_number).first()
+    new_employee = Employee(
+        full_name=employee.full_name,
+        phone=employee.phone,
+        address=employee.address,
+        hired_at=employee.hired_at,
     )
-    if operator_existence and operator_existence.is_active is True:
-        raise HTTPException(
-            status_code=400,
-            detail="My number already exists: please enter another one.",
-        )
-    if operator_existence and operator_existence.is_active is False:
-        operator_existence.is_active = True
-        operator_existence.name_user = operator.name_user
-        db.commit()
-        db.refresh(operator_existence)
-        return {"message": "Welcome back to our enterprise."}
-    new_operator = User(
-        name_user=operator.name_user,
-        my_number=operator.my_number,
-        role_user=Status.OPERATOR,
-    )
-    db.add(new_operator)
+    db.add(new_employee)
     db.commit()
-    db.refresh(new_operator)
+    db.refresh(new_employee)
     return {"message": "Welcome to our enterprise."}
 
 
 def create_manager(
-    manager: ManagerAdministratorValidation, login_confirmation: int, db: Session
+    current_account: Account, db: Session, account_validation: AccountValidation
 ):
     """Create a security manager route: manage works, progress and others functions"""
-    name_validation_administrator = (
-        db.query(User).filter(User.my_number == login_confirmation).first()
-    )
-    if not name_validation_administrator:
-        raise HTTPException(status_code=404, detail="administrator not found")
-    if name_validation_administrator.role_user != Status.ADMINISTRATOR:
+    if current_account.role != AccountRole.ADMINISTRATOR:
         raise HTTPException(
-            status_code=403,
-            detail="Access denied: only administrator can create managers on plataform",
+            status_code=HTTP_403_FORBIDDEN,
+            detail="Access denied: only administrator can create managers.",
         )
-
+    employee_existence = (
+        db.query(Employee).filter(Employee.id == account_validation.employee_id).first()
+    )
+    if not employee_existence or employee_existence.is_active is False:
+        raise HTTPException(
+            status_code=HTTP_404_NOT_FOUND,
+            detail="Active employee not found.",
+        )
     manager_existence = (
-        db.query(User).filter(User.my_number == manager.my_number).first()
+        db.query(Account)
+        .filter(Account.employee_id == account_validation.employee_id)
+        .first()
     )
-    if manager_existence and manager_existence.is_active is True:
+    if manager_existence:
         raise HTTPException(
-            status_code=400, detail="My number already exists: insert other"
+            status_code=HTTP_400_BAD_REQUEST,
+            detail="This employee already has an account.",
         )
-    if manager_existence and manager_existence.is_active is False:
-        manager_existence.is_active = True
-        manager_existence.name_user = manager.name_user
-        encrypted_password = generator_hash_password(manager.password_user)
-        manager_existence.password_user = encrypted_password
-        db.commit()
-        db.refresh(manager_existence)
-        return {"message": "Welcome back to our enterprise."}
-    encrypted_password = generator_hash_password(manager.password_user)
-    new_manager = User(
-        name_user=manager.name_user,
-        password_user=encrypted_password,
-        role_user=Status.MANAGER,
-        my_number=manager.my_number,
+    username_exists = (
+        db.query(Account)
+        .filter(Account.username == account_validation.username)
+        .first()
     )
+
+    if username_exists:
+        raise HTTPException(
+            status_code=409,
+            detail="Username already exists.",
+        )
+    new_manager = Account(
+        username=account_validation.username,
+        password_hash=generator_hash_password(account_validation.password),
+        role=AccountRole.MANAGER,
+        employee_id=account_validation.employee_id,
+    )
+
     db.add(new_manager)
     db.commit()
     db.refresh(new_manager)
     return {"message": "Welcome to the new manager"}
 
 
-def employee_demission(db: Session, my_number: int, login_confirmation: int):
+def employee_demission(db: Session, employee_id: int, current_account: Account):
     """Allow a manager to demission a employee"""
-    my_number_validation_manager = (
-        db.query(User).filter(User.my_number == login_confirmation).first()
+    if current_account.role != AccountRole.MANAGER or not current_account.is_active:
+        raise HTTPException(
+            status_code=HTTP_403_FORBIDDEN,
+            detail="Access denied: only active manager can demission employees.",
+        )
+    account_existence = (
+        db.query(Account).filter(Account.employee_id == employee_id).first()
     )
-    if not my_number_validation_manager:
-        raise HTTPException(status_code=404, detail="manager not found")
-    if (
-        my_number_validation_manager.role_user != Status.MANAGER
-        or my_number_validation_manager.is_active is False
-    ):
+    employee_existence = db.query(Employee).filter(Employee.id == employee_id).first()
+    if not employee_existence or employee_existence.is_active is False:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Employee not found")
+
+    if account_existence and account_existence.is_active:
         raise HTTPException(
-            status_code=403,
-            detail="Access denied: only manager can demission operator on plataform",
+            status_code=HTTP_400_BAD_REQUEST,
+            detail="Cannot demission employee with an active account.",
         )
-    employee_existence = db.query(User).filter(User.my_number == my_number).first()
-    if not employee_existence or employee_existence.is_active is not True:
-        raise HTTPException(status_code=404, detail="employee not found")
-    if employee_existence.role_user != Status.OPERATOR:
-        raise HTTPException(
-            status_code=403,
-            detail="Access denied: only operator can be demissioned on plataform",
-        )
+
+    disabled_at = datetime.now(timezone.utc)
+
+    for card in employee_existence.cards:
+        if card.is_active:
+            card.is_active = False
+            card.disabled_at = disabled_at
+
     employee_existence.is_active = False
+
     db.commit()
     db.refresh(employee_existence)
     return {"message": "Employee demissioned successfully."}
 
 
-def manager_demission(db: Session, my_number: int, login_confirmation: int):
-    """Allow a administrator to demission a manager"""
-    my_number_validation_administrator = (
-        db.query(User).filter(User.my_number == login_confirmation).first()
-    )
-    if not my_number_validation_administrator:
-        raise HTTPException(status_code=404, detail="administrator not found")
-    if my_number_validation_administrator.role_user != Status.ADMINISTRATOR:
+def deactive_manager_account(db: Session, current_account: Account, manager_id: int):
+    """Allow a administrator to deactivate a manager"""
+    if current_account.role != AccountRole.ADMINISTRATOR:
         raise HTTPException(
-            status_code=403,
-            detail="Access denied: only administrator can demission manager on plataform",
+            status_code=HTTP_403_FORBIDDEN,
+            detail="Access denied: only administrator can deactivate managers.",
         )
-    manager_existence = db.query(User).filter(User.my_number == my_number).first()
-    if not manager_existence or manager_existence.is_active is not True:
-        raise HTTPException(status_code=404, detail="manager not found")
-    if manager_existence.role_user != Status.MANAGER:
+    manager_existence = db.query(Account).filter(Account.id == manager_id).first()
+    if not manager_existence or manager_existence.is_active is False:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Manager not found")
+    if manager_existence.role != AccountRole.MANAGER:
         raise HTTPException(
-            status_code=403,
-            detail="Access denied: only manager can be demissioned on plataform",
+            status_code=HTTP_400_BAD_REQUEST,
+            detail="The account is not a manager.",
         )
     manager_existence.is_active = False
     db.commit()
     db.refresh(manager_existence)
-    return {"message": "Manager demissioned successfully."}
+    return {"message": "Manager account deactivated successfully."}
