@@ -3,13 +3,14 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from database import get_db
-from schemas import OperatorValidation, ManagerAdministratorValidation
-
+from schemas import EmployeeValidation, AccountValidation
+from models import Account
+from dependencies import get_current_account
 from services.users_service import (
     create_employee,
     create_manager,
     employee_demission,
-    manager_demission,
+    deactive_manager_account,
 )
 
 router = APIRouter(prefix="/users", tags=["User management"])
@@ -17,45 +18,45 @@ router = APIRouter(prefix="/users", tags=["User management"])
 
 @router.post("/employee/create")
 def create_employee_route(
-    operator: OperatorValidation,
-    login_confirmation: int,
+    employee: EmployeeValidation,
+    current_account: Account = Depends(get_current_account),
     db: Session = Depends(get_db),
 ):
     """Endpoint to create an employee."""
-    return create_employee(
-        operator=operator, login_confirmation=login_confirmation, db=db
-    )
+    return create_employee(employee=employee, current_account=current_account, db=db)
 
 
 @router.post("/manager/create")
 def create_manager_route(
-    manager: ManagerAdministratorValidation,
-    login_confirmation: int,
+    manager: AccountValidation,
+    current_account: Account = Depends(get_current_account),
     db: Session = Depends(get_db),
 ):
     """Endpoint to create a manager."""
-    return create_manager(manager=manager, login_confirmation=login_confirmation, db=db)
+    return create_manager(
+        current_account=current_account, db=db, account_validation=manager
+    )
 
 
 @router.post("/employee/demit")
 def employee_demission_route(
-    employee_number: int,
-    login_confirmation: int,
+    employee_id: int,
+    current_account: Account = Depends(get_current_account),
     db: Session = Depends(get_db),
 ):
     """Endpoint to demit an employee."""
     return employee_demission(
-        my_number=employee_number, login_confirmation=login_confirmation, db=db
+        employee_id=employee_id, current_account=current_account, db=db
     )
 
 
-@router.post("/manager/demit")
+@router.post("/manager/{manager_id}/deactivate")
 def manager_demission_route(
-    manager_number: int,
-    login_confirmation: int,
+    manager_id: int,
+    current_account: Account = Depends(get_current_account),
     db: Session = Depends(get_db),
 ):
     """Endpoint to demit a manager."""
-    return manager_demission(
-        my_number=manager_number, login_confirmation=login_confirmation, db=db
+    return deactive_manager_account(
+        manager_id=manager_id, current_account=current_account, db=db
     )
