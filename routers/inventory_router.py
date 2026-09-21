@@ -3,40 +3,28 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from database import get_db
-from schemas import InventoryMovementValidation, ProductValidation, DepartmentValidation
+from schemas import InventoryMovementValidation, ProductValidation, WarehouseValidation
+from dependencies import get_current_account
+from models.workforce import Account
 from services.inventory_service import (
-    department_creation,
     product_creation,
     inventory_movement_creation,
+    warehouse_creation,
 )
 
 router = APIRouter(prefix="/inventory", tags=["Inventory management"])
 
 
-@router.post("/department/create")
-def create_department_route(
-    department_validation: DepartmentValidation,
-    login_confirmation: int,
-    db: Session = Depends(get_db),
-):
-    """Endpoint to create a department."""
-    return department_creation(
-        department_validation=department_validation,
-        login_confirmation=login_confirmation,
-        db=db,
-    )
-
-
 @router.post("/product/create")
 def create_product_route(
     product_validation: ProductValidation,
-    login_confirmation: int,
+    current_account: Account = Depends(get_current_account),
     db: Session = Depends(get_db),
 ):
     """Endpoint to create a product."""
     return product_creation(
         product_validation=product_validation,
-        login_confirmation=login_confirmation,
+        current_account=current_account,
         db=db,
     )
 
@@ -44,12 +32,24 @@ def create_product_route(
 @router.post("/movement/create")
 def create_inventory_movement_route(
     inventory_movement_validation: InventoryMovementValidation,
-    login_confirmation: int,
+    current_account: Account = Depends(get_current_account),
     db: Session = Depends(get_db),
 ):
     """Endpoint to create an inventory movement."""
     return inventory_movement_creation(
-        inventory_movement_validation=inventory_movement_validation,
-        login_confirmation=login_confirmation,
+        data=inventory_movement_validation,
+        current_account=current_account,
         db=db,
+    )
+
+
+@router.post("/warehouse/create")
+def warehouse_creation_route(
+    warehouse_val: WarehouseValidation,
+    current_account: Account = Depends(get_current_account),
+    db=Depends(get_db),
+):
+    """Endpoint to create a warehouse"""
+    return warehouse_creation(
+        current_account=current_account, warehouse_validation=warehouse_val, db=db
     )

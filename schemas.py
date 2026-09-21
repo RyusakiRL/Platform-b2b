@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
-from models.enums import AccountRole, PaymentType
+from models.enums import AccountRole, MovementType
 
 
 class EmployeeValidation(BaseModel):
@@ -39,5 +39,13 @@ class InventoryMovementValidation(BaseModel):
 
     product_id: int = Field(gt=0)
     warehouse_id: int = Field(gt=0)
-    movement_type: PaymentType
+    movement_type: MovementType
     quantity: int = Field(gt=0)
+    unit_price_at_transaction: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
+
+
+class WarehouseValidation(BaseModel):
+    """Data validation for warehouse creation"""
+
+    name: str = Field(min_length=3, max_length=50)
+    address: str = Field(min_length=3, max_length=255)
