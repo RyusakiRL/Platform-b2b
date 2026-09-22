@@ -24,7 +24,7 @@ def create_employee(
     ]:
         raise HTTPException(
             status_code=HTTP_403_FORBIDDEN,
-            detail="Access denied: only activemanager or administrator can create employees.",
+            detail="Access denied: only active manager or administrator can create employees.",
         )
     new_employee = Employee(
         full_name=employee.full_name,
