@@ -1,28 +1,28 @@
 """This module contains functions to process Excel files and insert data into the database."""
 
 import shutil
-from datetime import datetime, timezone
 from pathlib import Path
 import pandas as pd
 from pydantic import ValidationError
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
-from schemas import RequiredColumns
-
-from models import CurrentInventory, InventoryMovement, Product, Status, User
+from starlette.status import (
+    HTTP_403_FORBIDDEN,
+)
+from schemas import InventoryRequiredColumns
+from models.inventory import CurrentInventory, InventoryMovement, Product
+from models.workforce import Account
+from models.enums import MovementType, AccountRole
 
 UPLOADS_FOLDER = Path("uploads")
 UPLOADS_FOLDER.mkdir(exist_ok=True)
 
 
-def process_inventory_excel(file: UploadFile, login_confirmation: int, db: Session):
+def process_inventory_excel(file: UploadFile, current_account: Account, db: Session):
     """Processes an uploaded Excel file and inserts product data into the database."""
-    manager_user = db.query(User).filter(User.my_number == login_confirmation).first()
-    if not manager_user or manager_user.is_active is False:
-        raise HTTPException(status_code=404, detail="User not found or inactive.")
-    if manager_user.role_user != Status.MANAGER:
+    if current_account.role != AccountRole.MANAGER:
         raise HTTPException(
-            status_code=403,
+            status_code=HTTP_403_FORBIDDEN,
             detail="Access denied: only managers can upload inventory data.",
         )
     if not file.filename.endswith((".xlsx", ".xls")):
@@ -49,7 +49,7 @@ def process_inventory_excel(file: UploadFile, login_confirmation: int, db: Sessi
             records, start=2
         ):  # Start at 2 to account for header row
             try:
-                valid_data = RequiredColumns(**row)
+                valid_data = InventoryRequiredColumns(**row)
             except ValidationError as e:
                 spreadsheet_errors.append({"excel_row": index, "errors": e.errors()})
                 continue
@@ -60,7 +60,7 @@ def process_inventory_excel(file: UploadFile, login_confirmation: int, db: Sessi
             p_movement_type = valid_data.movement_type
 
             p_price = valid_data.price
-            dept_id = valid_data.department_id
+            ware_id = valid_data.warehouse_id
             product = db.query(Product).filter_by(product_name=p_name).first()
             if not product:
                 product = Product(
@@ -72,31 +72,31 @@ def process_inventory_excel(file: UploadFile, login_confirmation: int, db: Sessi
                 added_products += 1
             inventory = (
                 db.query(CurrentInventory)
-                .filter_by(product_id=product.id, departments_id=dept_id)
+                .filter_by(product_id=product.id, departments_id=ware_id)
                 .first()
             )
             if not inventory:
                 inventory = CurrentInventory(
                     product_id=product.id,
-                    departments_id=dept_id,
+                    departments_id=ware_id,
                     product_in_stock=0,
                     product_to_come=0,
                 )
                 db.add(inventory)
                 db.flush()
 
-            if p_movement_type == "IN" and p_quantity > 0:
+            if p_movement_type == MovementType.IN and p_quantity > 0:
                 inventory.product_in_stock += p_quantity
                 movement = InventoryMovement(
                     current_inventory_id=inventory.id,
-                    movement_type="IN",
+                    movement_type=MovementType.IN,
                     quantity=p_quantity,
                     unit_price_at_transaction=p_price,
                     timestamp=p_datetime,
                 )
                 db.add(movement)
                 movements_recorded += 1
-            if p_movement_type == "OUT" and p_quantity > 0:
+            if p_movement_type == MovementType.OUT and p_quantity > 0:
                 if inventory.product_in_stock < p_quantity:
                     spreadsheet_errors.append(
                         {
@@ -109,7 +109,7 @@ def process_inventory_excel(file: UploadFile, login_confirmation: int, db: Sessi
 
                 movement = InventoryMovement(
                     current_inventory_id=inventory.id,
-                    movement_type="OUT",
+                    movement_type=MovementType.OUT,
                     quantity=p_quantity,
                     unit_price_at_transaction=p_price,
                     timestamp=p_datetime,
@@ -126,6 +126,6 @@ def process_inventory_excel(file: UploadFile, login_confirmation: int, db: Sessi
             "error_found": spreadsheet_errors,
         }
 
-    except Exception as e:
+    except Exception:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error processing data: {str(e)}")
+        raise
