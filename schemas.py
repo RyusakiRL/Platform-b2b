@@ -49,3 +49,10 @@ class WarehouseValidation(BaseModel):
 
     name: str = Field(min_length=3, max_length=50)
     address: str = Field(min_length=3, max_length=255)
+
+
+class CardValidation(BaseModel):
+    """Data validation for card creation"""
+
+    employee_id: int = Field(gt=0)
+    card_number: str = Field(min_length=6, max_length=6)
