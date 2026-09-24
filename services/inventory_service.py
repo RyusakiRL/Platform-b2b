@@ -132,8 +132,10 @@ def warehouse_creation(
             status_code=HTTP_400_BAD_REQUEST,
             detail="Warehouse with this name already exists.",
         )
-    warehouse_address_existence = db.query(Warehouse).filter(
-        Warehouse.address == warehouse_validation.address
+    warehouse_address_existence = (
+        db.query(Warehouse)
+        .filter(Warehouse.address == warehouse_validation.address)
+        .first()
     )
     if warehouse_address_existence:
         raise HTTPException(

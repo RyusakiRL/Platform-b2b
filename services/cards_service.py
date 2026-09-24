@@ -25,8 +25,8 @@ def card_creation(
             status_code=HTTP_403_FORBIDDEN,
             detail="Acess denied: only manager or administrator can create cards",
         )
-    employee_validation = db.query(Employee).filter(
-        Employee.id == card_validation.employee_id
+    employee_validation = (
+        db.query(Employee).filter(Employee.id == card_validation.employee_id).first()
     )
     if not employee_validation:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Employee not found")
@@ -44,7 +44,7 @@ def card_creation(
     generated_card_number_qr_code = str(uuid.uuid4())
     new_card = Card(
         card_number=generated_card_number_qr_code,
-        users_id=card_validation.users_id,
+        employee_id=card_validation.employee_id,
     )
     db.add(new_card)
     db.commit()
