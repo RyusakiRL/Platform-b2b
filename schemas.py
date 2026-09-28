@@ -55,13 +55,13 @@ class CardValidation(BaseModel):
     """Data validation for card creation"""
 
     employee_id: int = Field(gt=0)
-    card_number: str = Field(min_length=6, max_length=6)
+    card_number: str = Field(min_length=36, max_length=36)
 
 
 class InventoryRequiredColumns(BaseModel):
     """Data validation for excel inventory process"""
 
-    name: str = Field(min_length=3, max_lenght=50)
+    name: str = Field(min_length=3, max_length=50)
     quantity: int = Field(gt=0)
     timestamp: datetime
     movement_type: MovementType

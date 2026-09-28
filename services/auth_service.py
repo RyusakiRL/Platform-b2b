@@ -11,7 +11,7 @@ from security import verify_password, create_token_jwt
 def login(db: Session, username: str, password: str):
     """Login in system and return the token"""
     account = db.query(Account).filter(Account.username == username).first()
-    if not account or not verify_password(password, account.password):
+    if not account or not verify_password(password, account.password_hash):
         raise HTTPException(
             status_code=HTTP_401_UNAUTHORIZED, detail="Invalid credential"
         )
