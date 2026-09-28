@@ -78,12 +78,6 @@ class MonthlyPayroll(Base):
             "tax_deductions >= 0",
             name="ck_payroll_deductions_nonnegative",
         ),
-        UniqueConstraint(
-            "employee_id",
-            "reference_year",
-            "reference_month",
-            name="uq_payroll_employee_period",
-        ),
     )
 
 

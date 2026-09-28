@@ -1,5 +1,7 @@
 """Inventory service module for managing inventory movements."""
 
+from datetime import datetime
+from decimal import Decimal
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from starlette.status import (
@@ -151,3 +153,69 @@ def warehouse_creation(
     db.commit()
     db.refresh(new_warehouse)
     return {"message": "Warehouse created successfully."}
+
+
+def apply_inventory_movement(
+    product_id: int,
+    warehouse_id: int,
+    account_id: int,
+    movement_type: MovementType,
+    quantity: int,
+    db: Session,
+    unit_price: Decimal,
+    timestamp: datetime | None = None,
+):
+    """Function to apply the inventory movement"""
+    inventory = (
+        db.query(CurrentInventory)
+        .filter(
+            CurrentInventory.product_id == product_id,
+            CurrentInventory.warehouse_id == warehouse_id,
+        )
+        .with_for_update()
+        .first()
+    )
+
+    if inventory is None:
+        if movement_type == MovementType.OUT:
+            raise HTTPException(
+                status_code=HTTP_400_BAD_REQUEST,
+                detail="No stock available for this product in this warehouse.",
+            )
+
+        inventory = CurrentInventory(
+            product_id=product_id,
+            warehouse_id=warehouse_id,
+            product_in_stock=0,
+            product_to_come=0,
+        )
+        db.add(inventory)
+        db.flush()
+
+    if movement_type == MovementType.IN:
+        inventory.product_in_stock += quantity
+
+    elif movement_type == MovementType.OUT:
+        if inventory.product_in_stock < quantity:
+            raise HTTPException(
+                status_code=HTTP_400_BAD_REQUEST,
+                detail="Not enough stock for this movement.",
+            )
+
+        inventory.product_in_stock -= quantity
+
+    movement_data = {
+        "current_inventory_id": inventory.id,
+        "created_by_account_id": account_id,
+        "movement_type": movement_type,
+        "quantity": quantity,
+        "unit_price_at_transaction": unit_price,
+    }
+
+    if timestamp is not None:
+        movement_data["timestamp"] = timestamp
+
+    movement = InventoryMovement(**movement_data)
+    db.add(movement)
+
+    return movement

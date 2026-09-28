@@ -1,21 +1,19 @@
 """This module contains functions to process Excel files and insert data into the database."""
 
-import shutil
 from pathlib import Path
 import pandas as pd
 from pydantic import ValidationError
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
 from starlette.status import (
+    HTTP_400_BAD_REQUEST,
     HTTP_403_FORBIDDEN,
 )
 from schemas import InventoryRequiredColumns
-from models.inventory import CurrentInventory, InventoryMovement, Product
+from models.inventory import Product, Warehouse
 from models.workforce import Account
 from models.enums import MovementType, AccountRole
-
-UPLOADS_FOLDER = Path("uploads")
-UPLOADS_FOLDER.mkdir(exist_ok=True)
+from services.inventory_service import apply_inventory_movement
 
 
 def process_inventory_excel(file: UploadFile, current_account: Account, db: Session):
@@ -25,23 +23,27 @@ def process_inventory_excel(file: UploadFile, current_account: Account, db: Sess
             status_code=HTTP_403_FORBIDDEN,
             detail="Access denied: only managers can upload inventory data.",
         )
-    if not file.filename.endswith((".xlsx", ".xls")):
+
+    filename = Path(file.filename or "")
+    extension = filename.suffix.lower()
+    if extension not in {".xlsx", ".xls"}:
         raise HTTPException(
-            status_code=400, detail="Invalid file format. Use .xlsx or .xls"
+            status_code=HTTP_400_BAD_REQUEST,
+            detail="Invalid file format. Use .xlsx or .xls",
         )
 
-    file_path = UPLOADS_FOLDER / file.filename
-    with file_path.open("wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
     try:
-
-        df = pd.read_excel(file_path)
-
-        df = df.dropna(how="all")
-        df = df.replace({pd.NA: None})
-        records = df.to_dict(orient="records")
-
+        file.file.seek(0)
+        df = pd.read_excel(file.file)
+    except (ValueError, ImportError) as exc:
+        raise HTTPException(
+            status_code=HTTP_400_BAD_REQUEST,
+            detail="Invalid or corrupted Excel file.",
+        ) from exc
+    df = df.dropna(how="all")
+    df = df.replace({pd.NA: None})
+    records = df.to_dict(orient="records")
+    try:
         added_products = 0
         movements_recorded = 0
         spreadsheet_errors = []
@@ -53,70 +55,71 @@ def process_inventory_excel(file: UploadFile, current_account: Account, db: Sess
             except ValidationError as e:
                 spreadsheet_errors.append({"excel_row": index, "errors": e.errors()})
                 continue
+
             p_name = valid_data.name
+            p_sku = valid_data.sku
             p_quantity = valid_data.quantity
             p_datetime = valid_data.timestamp
-
             p_movement_type = valid_data.movement_type
-
             p_price = valid_data.price
             ware_id = valid_data.warehouse_id
-            product = db.query(Product).filter_by(product_name=p_name).first()
-            if not product:
+
+            product = db.query(Product).filter_by(sku=p_sku).first()
+            warehouse = db.query(Warehouse).filter_by(id=ware_id).first()
+            if not warehouse or not warehouse.is_active:
+                spreadsheet_errors.append(
+                    {
+                        "excel_row": index,
+                        "errors": f"Active warehouse with ID {ware_id} was not found.",
+                    }
+                )
+                continue
+            if not product and p_movement_type == MovementType.OUT:
+                spreadsheet_errors.append(
+                    {
+                        "excel_row": index,
+                        "errors": f"Product with SKU '{p_sku}' was not found.",
+                    }
+                )
+                continue
+            if product and not product.is_active:
+                spreadsheet_errors.append(
+                    {
+                        "excel_row": index,
+                        "errors": f"Product with SKU '{p_sku}' is inactive.",
+                    }
+                )
+                continue
+            if not product and p_movement_type == MovementType.IN:
                 product = Product(
                     product_name=p_name,
+                    sku=p_sku,
                     base_price=p_price,
                 )
                 db.add(product)
                 db.flush()
                 added_products += 1
-            inventory = (
-                db.query(CurrentInventory)
-                .filter_by(product_id=product.id, departments_id=ware_id)
-                .first()
-            )
-            if not inventory:
-                inventory = CurrentInventory(
+            try:
+                apply_inventory_movement(
                     product_id=product.id,
-                    departments_id=ware_id,
-                    product_in_stock=0,
-                    product_to_come=0,
-                )
-                db.add(inventory)
-                db.flush()
-
-            if p_movement_type == MovementType.IN and p_quantity > 0:
-                inventory.product_in_stock += p_quantity
-                movement = InventoryMovement(
-                    current_inventory_id=inventory.id,
-                    movement_type=MovementType.IN,
+                    warehouse_id=ware_id,
+                    account_id=current_account.id,
+                    movement_type=p_movement_type,
                     quantity=p_quantity,
-                    unit_price_at_transaction=p_price,
+                    unit_price=p_price,
                     timestamp=p_datetime,
+                    db=db,
                 )
-                db.add(movement)
-                movements_recorded += 1
-            if p_movement_type == MovementType.OUT and p_quantity > 0:
-                if inventory.product_in_stock < p_quantity:
-                    spreadsheet_errors.append(
-                        {
-                            "excel_row": index,
-                            "errors": f"Insufficient stock for product '{p_name}'",
-                        }
-                    )
-                    continue
-                inventory.product_in_stock -= p_quantity
-
-                movement = InventoryMovement(
-                    current_inventory_id=inventory.id,
-                    movement_type=MovementType.OUT,
-                    quantity=p_quantity,
-                    unit_price_at_transaction=p_price,
-                    timestamp=p_datetime,
+            except HTTPException as exc:
+                spreadsheet_errors.append(
+                    {
+                        "excel_row": index,
+                        "errors": exc.detail,
+                    }
                 )
-                db.add(movement)
+                continue
+            else:
                 movements_recorded += 1
-
         db.commit()
         return {
             "message": "Upload, inventory update and auditing completed successfully!",
