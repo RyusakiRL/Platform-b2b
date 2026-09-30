@@ -62,6 +62,7 @@ class InventoryRequiredColumns(BaseModel):
     """Data validation for excel inventory process"""
 
     name: str = Field(min_length=3, max_length=50)
+    sku: str = Field(min_length=3, max_length=50)
     quantity: int = Field(gt=0)
     timestamp: datetime
     movement_type: MovementType

@@ -52,7 +52,7 @@ if __name__ == "__main__":
         username=username,
         password=password,
         employee_id=employee_id,
-        role=AccountRole.ADMINISTRATOR,
+        role_user=AccountRole.ADMINISTRATOR,
     )
 
     with SESSIONLOCAL() as db:
