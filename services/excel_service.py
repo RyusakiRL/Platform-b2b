@@ -26,10 +26,9 @@ def process_inventory_excel(file: UploadFile, current_account: Account, db: Sess
 
     filename = Path(file.filename or "")
     extension = filename.suffix.lower()
-    if extension not in {".xlsx", ".xls"}:
+    if extension != ".xlsx":
         raise HTTPException(
-            status_code=HTTP_400_BAD_REQUEST,
-            detail="Invalid file format. Use .xlsx or .xls",
+            status_code=HTTP_400_BAD_REQUEST, detail="Invalid file format. Use .xlsx"
         )
 
     try:
