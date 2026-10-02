@@ -55,7 +55,6 @@ class CardValidation(BaseModel):
     """Data validation for card creation"""
 
     employee_id: int = Field(gt=0)
-    card_number: str = Field(min_length=36, max_length=36)
 
 
 class InventoryRequiredColumns(BaseModel):

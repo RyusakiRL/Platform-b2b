@@ -1,69 +1,111 @@
-"""System tests"""
+"""System tests."""
+
+import os
+from datetime import datetime, timezone
+
+os.environ["DATABASE_URL"] = "sqlite://"
+os.environ["SECRET_KEY"] = "secret-key-used-only-in-tests"
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from main import app
+from sqlalchemy.pool import StaticPool
+
 from database import get_db
-from models import Base, User, Status
+from main import app
+from models import Base
+from models.enums import AccountRole
+from models.workforce import Employee, Account
+from security import create_token_jwt
 
-# 1. Criamos um banco de dados temporário em memória para o teste (SQLite)
-# Assim não mexemos no seu PostgreSQL do Docker!
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test_temp.db"
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+    "sqlite://",
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
 )
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+TestingSessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine,
+)
 
 
-# 2. Criamos uma "injeção de dependência" temporária para a API usar esse banco
 def override_get_db():
+    db = TestingSessionLocal()
+
     try:
-        db = TestingSessionLocal()
         yield db
     finally:
         db.close()
 
-
-# Avisamos o FastAPI para trocar o banco real pelo banco de teste durante os testes
-app.dependency_overrides[get_db] = override_get_db
 
 client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
 def setup_database():
-    """Cria as tabelas antes de cada teste e deleta depois (Limpeza automática)"""
     Base.metadata.create_all(bind=engine)
+    app.dependency_overrides[get_db] = override_get_db
+
     yield
+
+    app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=engine)
 
 
-def test_deny_user_creation_without_perm(setup_database):
-    """Prevents anyone other than an administrator from creating a manager"""
-    db = TestingSessionLocal()
-    normal_employee = User(
-        name_user="Operador Teste",
-        my_number="123456789012",
-        role_user=Status.OPERATOR,
-        is_active=True,
-    )
-    db.add(normal_employee)
-    db.commit()
-    db.close()
+def test_manager_cannot_create_another_manager():
+    """A manager cannot create another manager."""
 
-    new_manager_data = {
-        "name_user": "New Manager",
-        "password_user": "senhaforte123",
-        "my_number": "999888777666",
-    }
+    with TestingSessionLocal() as db:
+        requester_employee = Employee(
+            full_name="Manager Test",
+            phone="1234567890",
+            address="123 Test St",
+            hired_at=datetime.now(timezone.utc),
+            is_active=True,
+        )
+
+        target_employee = Employee(
+            full_name="New Manager Employee",
+            phone="0987654321",
+            address="456 Test St",
+            hired_at=datetime.now(timezone.utc),
+            is_active=True,
+        )
+
+        db.add_all([requester_employee, target_employee])
+        db.flush()
+
+        requester_account = Account(
+            username="manager_test",
+            password_hash="unused-hash-in-this-test",
+            employee_id=requester_employee.id,
+            role=AccountRole.MANAGER,
+            is_active=True,
+        )
+
+        db.add(requester_account)
+        db.commit()
+
+        requester_id = requester_account.id
+        target_employee_id = target_employee.id
+
+    token = create_token_jwt({"sub": str(requester_id)})
 
     response = client.post(
-        "/users/manager/create?login_confirmation=123456789012", json=new_manager_data
+        "/users/manager/create",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "username": "new_manager",
+            "password": "senhaforte123",
+            "employee_id": target_employee_id,
+            "role_user": "manager",
+        },
     )
+
     assert response.status_code == 403
-    assert (
-        response.json()["detail"]
-        == "Access denied: only administrator can create managers on plataform"
-    )
+    assert response.json() == {
+        "detail": "Access denied: only administrator can create managers."
+    }

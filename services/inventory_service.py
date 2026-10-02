@@ -68,52 +68,22 @@ def inventory_movement_creation(
             detail="Warehouse not found.",
         )
     try:
-        current_inventory = (
-            (
-                db.query(CurrentInventory).filter(
-                    CurrentInventory.product_id == data.product_id,
-                    CurrentInventory.warehouse_id == data.warehouse_id,
-                )
-            )
-            .with_for_update()
-            .first()
-        )
-
-        if current_inventory is None:
-            if data.movement_type == MovementType.OUT:
-                raise HTTPException(
-                    status_code=HTTP_400_BAD_REQUEST,
-                    detail="No stock available for this product in this warehouse.",
-                )
-            current_inventory = CurrentInventory(
-                product_id=data.product_id,
-                warehouse_id=data.warehouse_id,
-                product_in_stock=0,
-                product_to_come=0,
-            )
-            db.add(current_inventory)
-            db.flush()
-        if data.movement_type == MovementType.IN:
-            current_inventory.product_in_stock += data.quantity
-        else:
-            if current_inventory.product_in_stock < data.quantity:
-                raise HTTPException(
-                    status_code=HTTP_400_BAD_REQUEST,
-                    detail="Not enough stock for this movement.",
-                )
-            current_inventory.product_in_stock -= data.quantity
-        new_inventory_movement = InventoryMovement(
-            created_by_account_id=current_account.id,
-            current_inventory_id=current_inventory.id,
+        apply_inventory_movement(
+            product_id=data.product_id,
+            warehouse_id=data.warehouse_id,
+            account_id=current_account.id,
             movement_type=data.movement_type,
             quantity=data.quantity,
-            unit_price_at_transaction=data.unit_price_at_transaction,
+            unit_price=data.unit_price_at_transaction,
+            db=db,
         )
-        db.add(new_inventory_movement)
+
         db.commit()
+
     except Exception:
         db.rollback()
         raise
+
     return {"message": "Inventory movement recorded successfully."}
 
 
