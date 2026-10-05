@@ -73,7 +73,7 @@ def create_manager(
 
     if username_exists:
         raise HTTPException(
-            status_code=409,
+            status_code=HTTP_400_BAD_REQUEST,
             detail="Username already exists.",
         )
     new_manager = Account(
@@ -86,7 +86,7 @@ def create_manager(
     db.add(new_manager)
     db.commit()
     db.refresh(new_manager)
-    return {"message": "Welcome to the new manager"}
+    return {"message": "Manager created successfully."}
 
 
 def employee_demission(db: Session, employee_id: int, current_account: Account):

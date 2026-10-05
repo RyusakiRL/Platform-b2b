@@ -109,3 +109,57 @@ def test_manager_cannot_create_another_manager():
     assert response.json() == {
         "detail": "Access denied: only administrator can create managers."
     }
+
+
+def test_administrator_can_create_manager():
+    """An administrator can create a manager."""
+
+    with TestingSessionLocal() as db:
+        requester_employee = Employee(
+            full_name="Administrator Test",
+            phone="1234567890",
+            address="123 Test St",
+            hired_at=datetime.now(timezone.utc),
+            is_active=True,
+        )
+
+        target_employee = Employee(
+            full_name="New Manager Employee",
+            phone="0987654321",
+            address="456 Test St",
+            hired_at=datetime.now(timezone.utc),
+            is_active=True,
+        )
+
+        db.add_all([requester_employee, target_employee])
+        db.flush()
+
+        requester_account = Account(
+            username="admin_test",
+            password_hash="unused-hash-in-this-test",
+            employee_id=requester_employee.id,
+            role=AccountRole.ADMINISTRATOR,
+            is_active=True,
+        )
+
+        db.add(requester_account)
+        db.commit()
+
+        requester_id = requester_account.id
+        target_employee_id = target_employee.id
+
+    token = create_token_jwt({"sub": str(requester_id)})
+
+    response = client.post(
+        "/users/manager/create",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "username": "new_manager",
+            "password": "senhaforte123",
+            "employee_id": target_employee_id,
+            "role_user": "manager",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"message": "Manager created successfully."}
