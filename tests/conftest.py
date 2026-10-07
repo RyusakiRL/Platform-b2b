@@ -1,18 +1,21 @@
 """Configuration for pytest fixtures and test setup."""
 
+import os
+
 import pytest
-from sqlalchemy import create_engine
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-from fastapi.testclient import TestClient
-from database import get_db
-from main import app
-from models import Base
-import os
 
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["SECRET_KEY"] = "secret-key-used-only-in-tests"
 
+# Estes imports precisam acontecer depois da configuração do ambiente.
+# pylint: disable=wrong-import-position
+from database import get_db
+from main import app
+from models import Base
 
 engine = create_engine(
     "sqlite://",
@@ -20,7 +23,7 @@ engine = create_engine(
     poolclass=StaticPool,
 )
 
-TestingSessionLocal = sessionmaker(
+TESTINGSESSIONLOCAL = sessionmaker(
     autocommit=False,
     autoflush=False,
     bind=engine,
@@ -29,12 +32,20 @@ TestingSessionLocal = sessionmaker(
 
 def override_get_db():
     """Create a new database session for testing and yield it."""
-    db = TestingSessionLocal()
+    db = TESTINGSESSIONLOCAL()
 
     try:
         yield db
     finally:
         db.close()
+
+
+@event.listens_for(engine, "connect")
+def enable_sqlite_foreign_keys(dbapi_connection, _):
+    """Enable foreign key constraints for SQLite."""
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
 
 
 @pytest.fixture(autouse=True)
@@ -53,7 +64,7 @@ def setup_database():
 def db_session():
     """Provide a database session for arranging and checking test data."""
 
-    db = TestingSessionLocal()
+    db = TESTINGSESSIONLOCAL()
 
     try:
         yield db
