@@ -136,6 +136,12 @@ def apply_inventory_movement(
     timestamp: datetime | None = None,
 ):
     """Function to apply the inventory movement"""
+    warehouse = db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
+    if not warehouse or not warehouse.is_active:
+        raise HTTPException(
+            status_code=HTTP_404_NOT_FOUND,
+            detail="Warehouse not found.",
+        )
     inventory = (
         db.query(CurrentInventory)
         .filter(

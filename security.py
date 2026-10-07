@@ -33,13 +33,14 @@ def verify_password(password_pure_text: str, hashed_password: str) -> bool:
     return pwd_context.verify(password_pure_text, hashed_password)
 
 
-def create_token_jwt(data: dict):
+def create_token_jwt(data: dict, expires_delta: timedelta | None = None) -> str:
     """Generates the digital badge (JWT Token) for the user."""
     data_encoding = data.copy()
 
-    expiration = datetime.now(timezone.utc) + timedelta(
-        minutes=ACCESS_TOKEN_EXPIRE_MINUTES
-    )
+    if expires_delta is None:
+        expires_delta = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+
+    expiration = datetime.now(timezone.utc) + expires_delta
     data_encoding.update({"exp": expiration})
 
     encoded_token = jwt.encode(data_encoding, SECRET_KEY, algorithm=ALGORITHM)
