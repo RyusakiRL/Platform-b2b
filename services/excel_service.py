@@ -18,7 +18,7 @@ from services.inventory_service import apply_inventory_movement
 
 def process_inventory_excel(file: UploadFile, current_account: Account, db: Session):
     """Processes an uploaded Excel file and inserts product data into the database."""
-    if current_account.role != AccountRole.MANAGER:
+    if current_account.role not in [AccountRole.MANAGER, AccountRole.ADMINISTRATOR]:
         raise HTTPException(
             status_code=HTTP_403_FORBIDDEN,
             detail="Access denied: only managers can upload inventory data.",
