@@ -9,12 +9,10 @@ from models.inventory import CurrentInventory, Warehouse, Product
 from models.workforce import Account, AccountRole, Employee
 from models.enums import MovementType
 
-warehouse_validation = {"name": "Test Warehouse", "address": "123 test St"}
-
 
 @pytest.fixture(name="inventory_context")
 def fixture_inventory_context(db_session):
-    """Create valid dependencies for inventory tests."""
+    """Create valid dependencies for inventory stests."""
 
     employee = Employee(
         full_name="Test Manager",
@@ -65,11 +63,7 @@ def test_in_movement_creates_inventory(db_session, inventory_context):
     product = inventory_context["product"]
     warehouse = inventory_context["warehouse"]
     account = inventory_context["account"]
-    new_warehouse = Warehouse(
-        name=warehouse_validation["name"], address=warehouse_validation["address"]
-    )
-    db_session.add(new_warehouse)
-    db_session.commit()
+
     apply_inventory_movement(
         product_id=product.id,
         warehouse_id=warehouse.id,
@@ -99,11 +93,7 @@ def test_in_movement_increases_existing_stock(db_session, inventory_context):
     account = inventory_context["account"]
     initial_quantity = 5
     additional_quantity = 10
-    new_warehouse = Warehouse(
-        name=warehouse_validation["name"], address=warehouse_validation["address"]
-    )
-    db_session.add(new_warehouse)
-    db_session.commit()
+
     # Create initial inventory record
     apply_inventory_movement(
         product_id=product.id,
@@ -185,11 +175,6 @@ def test_out_without_inventory_returns(db_session, inventory_context):
     product = inventory_context["product"]
     warehouse = inventory_context["warehouse"]
     account = inventory_context["account"]
-    new_warehouse = Warehouse(
-        name=warehouse_validation["name"], address=warehouse_validation["address"]
-    )
-    db_session.add(new_warehouse)
-    db_session.commit()
     with pytest.raises(HTTPException) as exc_info:
         apply_inventory_movement(
             product_id=product.id,
@@ -214,11 +199,6 @@ def test_out_without_enough_inventory_returns(db_session, inventory_context):
     account = inventory_context["account"]
     initial_quantity = 5
     retired_quantity = 10
-    new_warehouse = Warehouse(
-        name=warehouse_validation["name"], address=warehouse_validation["address"]
-    )
-    db_session.add(new_warehouse)
-    db_session.commit()
 
     # Create initial inventory record
     apply_inventory_movement(
@@ -253,12 +233,6 @@ def test_failed_out_movement_does_not_change_inventory(db_session, inventory_con
     account = inventory_context["account"]
     initial_quantity = 5
     retired_quantity = 10
-    new_warehouse = Warehouse(
-        name=warehouse_validation["name"], address=warehouse_validation["address"]
-    )
-    db_session.add(new_warehouse)
-    db_session.commit()
-
     # Create initial inventory record
     apply_inventory_movement(
         product_id=product.id,
