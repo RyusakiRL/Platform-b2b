@@ -1,3 +1,6 @@
+"""Migration description."""
+
+# pylint: disable=no-member
 """modularize database models
 
 Revision ID: b3139e6ca591
