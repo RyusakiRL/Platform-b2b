@@ -16,15 +16,15 @@ jobs:
       SECRET_KEY: "senha_secreta_temporaria_para_testes"
 
     steps:
-    - name: Baixando o repositório
-      uses: actions/checkout@v3
+    - name: Downloading repository
+      uses: actions/checkout@v7
 
-    - name: Configurando o Python 3.11
-      uses: actions/setup-python@v4
+    - name: Configuring Python 3.11
+      uses: actions/setup-python@v7
       with:
         python-version: "3.11"
 
-    - name: Instalando dependências
+    - name: Installing dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
