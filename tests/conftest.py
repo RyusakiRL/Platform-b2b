@@ -23,7 +23,7 @@ engine = create_engine(
     poolclass=StaticPool,
 )
 
-TESTINGSESSIONLOCAL = sessionmaker(
+TESTING_SESSION_LOCAL = sessionmaker(
     autocommit=False,
     autoflush=False,
     bind=engine,
@@ -32,7 +32,7 @@ TESTINGSESSIONLOCAL = sessionmaker(
 
 def override_get_db():
     """Create a new database session for testing and yield it."""
-    db = TESTINGSESSIONLOCAL()
+    db = TESTING_SESSION_LOCAL()
 
     try:
         yield db
@@ -64,7 +64,7 @@ def setup_database():
 def db_session():
     """Provide a database session for arranging and checking test data."""
 
-    db = TESTINGSESSIONLOCAL()
+    db = TESTING_SESSION_LOCAL()
 
     try:
         yield db
