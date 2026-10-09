@@ -2,32 +2,78 @@ name: Testes Automatizados (CI)
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
+
+permissions:
+  contents: read
 
 jobs:
-  test:
+  testes-sqlite:
+    name: Testes unitários com SQLite
     runs-on: ubuntu-latest
-    
-    # CRIAMOS UM ".ENV" FALSO SÓ PARA O ROBÔ USAR
+
     env:
-      DATABASE_URL: "sqlite:///./test_temp.db"
-      SECRET_KEY: "senha_secreta_temporaria_para_testes"
+      DATABASE_URL: "sqlite://"
+      SECRET_KEY: "secret-key-used-only-in-tests"
 
     steps:
-    - name: Baixando o repositório
-      uses: actions/checkout@v3
+      - name: Baixando o repositório
+        uses: actions/checkout@v7
 
-    - name: Configurando o Python 3.11
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.11"
+      - name: Configurando o Python 3.11
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
 
-    - name: Instalando dependências
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Instalando dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-    - name: Rodando o Pytest
-      run: python -m pytest tests -q
+      - name: Rodando o Pytest
+        run: python -m pytest tests -q
+
+  migrations-postgresql:
+    name: Validar migrations no PostgreSQL
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: platform_b2b_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test_user -d platform_b2b_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: "postgresql+psycopg2://test_user:test_password@localhost:5432/platform_b2b_test"
+      SECRET_KEY: "secret-key-used-only-in-tests"
+
+    steps:
+      - name: Baixando o repositório
+        uses: actions/checkout@v7
+
+      - name: Configurando o Python 3.11
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Instalando dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Criando banco pelas migrations
+        run: python -m alembic upgrade head
+
+      - name: Verificando diferenças entre migrations e models
+        run: python -m alembic check
