@@ -142,15 +142,30 @@ def apply_inventory_movement(
             status_code=HTTP_404_NOT_FOUND,
             detail="Warehouse not found.",
         )
-    inventory = (
+    inventory_query = (
         db.query(CurrentInventory)
         .filter(
             CurrentInventory.product_id == product_id,
             CurrentInventory.warehouse_id == warehouse_id,
         )
         .with_for_update()
-        .first()
     )
+    inventory = inventory_query.first()
+    if inventory is None:
+        # Ainda não existe uma linha de estoque para bloquear.
+        # Bloqueamos o produto enquanto o primeiro estoque é criado.
+        product = (
+            db.query(Product).filter(Product.id == product_id).with_for_update().first()
+        )
+
+        if not product or not product.is_active:
+            raise HTTPException(
+                status_code=HTTP_404_NOT_FOUND,
+                detail="Product not found.",
+            )
+
+        # Outra requisição pode ter criado o estoque enquanto aguardávamos.
+        inventory = inventory_query.first()
 
     if inventory is None:
         if movement_type == MovementType.OUT:
