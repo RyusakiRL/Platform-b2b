@@ -12,7 +12,7 @@ from models.enums import MovementType
 
 @pytest.fixture(name="inventory_context")
 def fixture_inventory_context(db_session):
-    """Create valid dependencies for inventory stests."""
+    """Create valid dependencies for inventory tests."""
 
     employee = Employee(
         full_name="Test Manager",
@@ -267,3 +267,80 @@ def test_failed_out_movement_does_not_change_inventory(db_session, inventory_con
     )
     assert inventory is not None
     assert inventory.product_in_stock == initial_quantity
+
+
+def test_movement_creates_inventory_history(db_session, inventory_context):
+    """Test that a movement creates an inventory history record."""
+    product = inventory_context["product"]
+    warehouse = inventory_context["warehouse"]
+    account = inventory_context["account"]
+
+    apply_inventory_movement(
+        product_id=product.id,
+        warehouse_id=warehouse.id,
+        account_id=account.id,
+        movement_type=MovementType.IN,
+        quantity=10,
+        db=db_session,
+        unit_price=Decimal("5.00"),
+    )
+
+    history_record = (
+        db_session.query(CurrentInventory)
+        .filter_by(
+            product_id=product.id,
+            warehouse_id=warehouse.id,
+        )
+        .first()
+    )
+    assert history_record is not None
+
+
+def test_inactive_product(db_session, inventory_context):
+    """Test that an IN movement with an inactive product raises an error."""
+    product = inventory_context["product"]
+    warehouse = inventory_context["warehouse"]
+    account = inventory_context["account"]
+
+    # Deactivate the product
+    product.is_active = False
+    db_session.commit()
+
+    with pytest.raises(HTTPException) as exc_info:
+        apply_inventory_movement(
+            product_id=product.id,
+            warehouse_id=warehouse.id,
+            account_id=account.id,
+            movement_type=MovementType.IN,
+            quantity=10,
+            db=db_session,
+            unit_price=Decimal("5.00"),
+        )
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "Product not found."
+
+
+def test_inactive_warehouse(db_session, inventory_context):
+    """Test that an IN movement with an inactive warehouse raises an error."""
+    product = inventory_context["product"]
+    warehouse = inventory_context["warehouse"]
+    account = inventory_context["account"]
+
+    # Deactivate the warehouse
+    warehouse.is_active = False
+    db_session.commit()
+
+    with pytest.raises(HTTPException) as exc_info:
+        apply_inventory_movement(
+            product_id=product.id,
+            warehouse_id=warehouse.id,
+            account_id=account.id,
+            movement_type=MovementType.IN,
+            quantity=10,
+            db=db_session,
+            unit_price=Decimal("5.00"),
+        )
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "Warehouse not found."
