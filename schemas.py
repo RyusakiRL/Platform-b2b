@@ -3,7 +3,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, UUID4
 
 from models.enums import AccountRole, MovementType
 
@@ -67,3 +67,7 @@ class InventoryRequiredColumns(BaseModel):
     movement_type: MovementType
     price: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
     warehouse_id: int
+
+
+class CardLookup(BaseModel):
+    card_number: UUID4
