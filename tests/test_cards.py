@@ -1,11 +1,9 @@
 """Cards tests module."""
 
 from datetime import datetime, timezone
-
-import pytest
-from fastapi import HTTPException
-from models.workforce import Account, AccountRole, Employee, Card
 from uuid import UUID
+import pytest
+from models.workforce import Account, AccountRole, Employee, Card
 from security import create_token_jwt
 
 
@@ -102,3 +100,30 @@ def test_employee_cannot_have_multiple_active_cards(db_session, client, cards_co
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Employee already have a active card"
+
+
+def test_disable_card_makes_inactive(db_session, client, cards_context):
+    """Test that disabling a card makes it inactive."""
+    employee = cards_context["employee"]
+    account = cards_context["account"]
+
+    # Create an active card
+    card = Card(
+        card_number="2222222222222222",
+        employee_id=employee.id,
+        is_active=True,
+    )
+    db_session.add(card)
+    db_session.commit()
+
+    token = create_token_jwt({"sub": str(account.id)})
+
+    # Disable the card
+    response = client.patch(
+        f"/cards/disable/{card.id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    db_session.refresh(card)
+    assert not card.is_active
