@@ -127,3 +127,19 @@ def test_disable_card_makes_inactive(db_session, client, cards_context):
     assert response.status_code == 200
     db_session.refresh(card)
     assert not card.is_active
+
+
+def test_disable_missing_card_returns_404(client, cards_context):
+    """Test that disabling a non-existent card returns a 404 error."""
+    account = cards_context["account"]
+
+    token = create_token_jwt({"sub": str(account.id)})
+
+    # Attempt to disable a card with a non-existent ID
+    response = client.patch(
+        "/cards/disable/9999",  # Assuming 9999 is a non-existent card ID
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Card not found"
