@@ -21,7 +21,7 @@ def process_inventory_excel(file: UploadFile, current_account: Account, db: Sess
     if current_account.role not in [AccountRole.MANAGER, AccountRole.ADMINISTRATOR]:
         raise HTTPException(
             status_code=HTTP_403_FORBIDDEN,
-            detail="Access denied: only managers can upload inventory data.",
+            detail="Access denied: only managers and administrators can upload inventory data.",
         )
 
     filename = Path(file.filename or "")

@@ -29,7 +29,10 @@ def card_creation(
         db.query(Employee).filter(Employee.id == card_validation.employee_id).first()
     )
     if not employee_validation or not employee_validation.is_active:
-        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Employee not found")
+        raise HTTPException(
+            status_code=HTTP_403_FORBIDDEN,
+            detail="Cannot create card for inactive employee",
+        )
 
     card_existence = (
         db.query(Card).filter(Card.employee_id == card_validation.employee_id).all()
