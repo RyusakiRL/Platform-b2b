@@ -127,3 +127,41 @@ def test_disable_card_makes_inactive(db_session, client, cards_context):
     assert response.status_code == 200
     db_session.refresh(card)
     assert not card.is_active
+
+
+def test_disable_missing_card_returns_404(client, cards_context):
+    """Test that disabling a non-existent card returns a 404 error."""
+    account = cards_context["account"]
+
+    token = create_token_jwt({"sub": str(account.id)})
+
+    # Attempt to disable a card with a non-existent ID
+    response = client.patch(
+        "/cards/disable/9999",  # Assuming 9999 is a non-existent card ID
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Card not found"
+
+
+def test_cannot_create_card_for_inactive_employee(db_session, client, cards_context):
+    """Test that a card cannot be created for an inactive employee."""
+    employee = cards_context["employee"]
+    account = cards_context["account"]
+
+    # Deactivate the employee
+    employee.is_active = False
+    db_session.commit()
+
+    token = create_token_jwt({"sub": str(account.id)})
+
+    # Attempt to create a card for the inactive employee
+    response = client.post(
+        "/cards/create",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"employee_id": employee.id},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Cannot create card for inactive employee"

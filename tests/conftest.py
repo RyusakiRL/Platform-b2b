@@ -11,8 +11,6 @@ from sqlalchemy.pool import StaticPool
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["SECRET_KEY"] = "secret-key-used-only-in-tests"
 
-# Estes imports precisam acontecer depois da configuração do ambiente.
-# pylint: disable=wrong-import-position
 from database import get_db
 from main import app
 from models import Base
