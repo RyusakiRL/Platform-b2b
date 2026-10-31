@@ -2,9 +2,12 @@
 
 from datetime import datetime, timezone
 from io import BytesIO
+from decimal import Decimal
+from unittest.mock import patch
 import pytest
 import pandas as pd
-from decimal import Decimal
+from fastapi import UploadFile
+from services.excel_service import process_inventory_excel
 from models.enums import MovementType
 from models.workforce import Account, AccountRole, Employee
 from models.inventory import Product, CurrentInventory, Warehouse
@@ -287,3 +290,117 @@ def test_excel_out_with_insufficient_stock(client, db_session, excel_context):
     )
 
     assert updated_inventory.product_in_stock == 5
+
+
+def test_excel_processes_valid_rows_and_reports_invalid_rows(client, excel_context):
+    """Test that an Excel file with mixed valid and invalid rows is processed correctly."""
+
+    account = excel_context["account"]
+    warehouse = excel_context["warehouse"]
+    token = create_token_jwt({"sub": str(account.id)})
+
+    timestamp = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    data = {
+        "name": ["Product E", "Product F", "Product G"],
+        "sku": ["SKU005", "SKU006", "SKU007"],
+        "quantity": [20, 15, 10],
+        "timestamp": [timestamp, timestamp, timestamp],
+        "movement_type": [
+            MovementType.IN.value,
+            MovementType.OUT.value,
+            MovementType.IN.value,
+        ],
+        "price": [75.0, 100.0, 50.0],
+        "warehouse_id": [
+            warehouse.id,
+            warehouse.id,
+            9999,
+        ],  # Last row has unknown warehouse
+    }
+
+    excel_file = BytesIO()
+    pd.DataFrame(data).to_excel(excel_file, index=False)
+    excel_file.seek(0)
+
+    response = client.post(
+        "/excel/upload/inventory",
+        headers={"Authorization": f"Bearer {token}"},
+        files={
+            "file": (
+                "mixed_rows.xlsx",
+                excel_file,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert response.status_code == 200, response.text
+
+    body = response.json()
+
+    assert body["rows_processed"] == 3
+    assert body["new_products_cataloged"] == 1  # Product E
+    assert body["inventory_movements_recorded"] == 1
+    assert len(body["error_found"]) == 2
+    assert body["error_found"][0]["excel_row"] == 3
+
+
+def test_unexpected_error_rolls_back_entire_import(
+    db_session,
+    excel_context,
+):
+    """Test that an unexpected error rolls back the entire import."""
+
+    account = excel_context["account"]
+    warehouse = excel_context["warehouse"]
+
+    timestamp = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    data = {
+        "name": ["Product H", "Product I"],
+        "sku": ["SKU008", "SKU009"],
+        "quantity": [30, 25],
+        "timestamp": [timestamp, timestamp],
+        "movement_type": [
+            MovementType.IN.value,
+            MovementType.IN.value,
+        ],
+        "price": [120.0, 150.0],
+        "warehouse_id": [warehouse.id, warehouse.id],
+    }
+
+    excel_file = BytesIO()
+    pd.DataFrame(data).to_excel(excel_file, index=False)
+    excel_file.seek(0)
+
+    upload_file = UploadFile(
+        filename="unexpected_error.xlsx",
+        file=excel_file,
+    )
+
+    with patch.object(
+        db_session,
+        "commit",
+        side_effect=RuntimeError("Simulated unexpected error"),
+    ), patch.object(
+        db_session,
+        "rollback",
+        wraps=db_session.rollback,
+    ) as rollback_mock:
+        with pytest.raises(
+            RuntimeError,
+            match="Simulated unexpected error",
+        ):
+            process_inventory_excel(
+                file=upload_file,
+                current_account=account,
+                db=db_session,
+            )
+
+    rollback_mock.assert_called_once()
+
+    products_created = (
+        db_session.query(Product).filter(Product.sku.in_(["SKU008", "SKU009"])).count()
+    )
+
+    assert products_created == 0
