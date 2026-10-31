@@ -210,3 +210,121 @@ def apply_inventory_movement(
     db.add(movement)
 
     return movement
+
+
+def get_current_inventory(
+    product_id: int,
+    warehouse_id: int,
+    db: Session,
+) -> CurrentInventory:
+    """Get the current inventory for a specific product in a specific warehouse"""
+    inventory = (
+        db.query(CurrentInventory)
+        .filter(
+            CurrentInventory.product_id == product_id,
+            CurrentInventory.warehouse_id == warehouse_id,
+        )
+        .first()
+    )
+    if not inventory:
+        raise HTTPException(
+            status_code=HTTP_404_NOT_FOUND,
+            detail="Current inventory not found for this product in this warehouse.",
+        )
+    return inventory
+
+
+def get_warehouse_inventory(
+    warehouse_id: int,
+    db: Session,
+    offset: int = 0,
+    limit: int = 50,
+) -> list[CurrentInventory]:
+    """Get a paginated inventory list for an existing warehouse."""
+
+    warehouse = db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
+
+    if warehouse is None:
+        raise HTTPException(
+            status_code=HTTP_404_NOT_FOUND,
+            detail="Warehouse not found.",
+        )
+
+    return (
+        db.query(CurrentInventory)
+        .filter(CurrentInventory.warehouse_id == warehouse_id)
+        .order_by(CurrentInventory.id)
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+
+def get_stock_movements(
+    product_id: int,
+    warehouse_id: int,
+    db: Session,
+    offset: int = 0,
+    limit: int = 50,
+) -> list[InventoryMovement]:
+    """Get the stock movements for a specific product in a specific warehouse"""
+    product = db.query(Product).filter(Product.id == product_id).first()
+    warehouse = db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
+
+    if product is None:
+        raise HTTPException(
+            status_code=HTTP_404_NOT_FOUND,
+            detail="Product not found.",
+        )
+
+    if warehouse is None:
+        raise HTTPException(
+            status_code=HTTP_404_NOT_FOUND,
+            detail="Warehouse not found.",
+        )
+
+    movements = (
+        db.query(InventoryMovement)
+        .join(CurrentInventory)
+        .filter(
+            CurrentInventory.product_id == product_id,
+            CurrentInventory.warehouse_id == warehouse_id,
+        )
+        .order_by(
+            InventoryMovement.timestamp.desc(),
+            InventoryMovement.id.desc(),
+        )
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return movements
+
+
+def get_inventory_movements_by_warehouse(
+    warehouse_id: int,
+    db: Session,
+    offset: int = 0,
+    limit: int = 50,
+) -> list[InventoryMovement]:
+    """Get stock movements for an existing warehouse."""
+
+    warehouse = db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
+
+    if warehouse is None:
+        raise HTTPException(
+            status_code=HTTP_404_NOT_FOUND,
+            detail="Warehouse not found.",
+        )
+    return (
+        db.query(InventoryMovement)
+        .join(CurrentInventory)
+        .filter(CurrentInventory.warehouse_id == warehouse_id)
+        .order_by(
+            InventoryMovement.timestamp.desc(),
+            InventoryMovement.id.desc(),
+        )
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
