@@ -1,6 +1,6 @@
 """Router for inventory-related endpoints."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from database import get_db
 from schemas import InventoryMovementValidation, ProductValidation, WarehouseValidation
@@ -10,6 +10,10 @@ from services.inventory_service import (
     product_creation,
     inventory_movement_creation,
     warehouse_creation,
+    get_warehouse_inventory,
+    get_current_inventory,
+    get_stock_movements,
+    get_inventory_movements_by_warehouse,
 )
 
 router = APIRouter(prefix="/inventory", tags=["Inventory management"])
@@ -52,4 +56,80 @@ def warehouse_creation_route(
     """Endpoint to create a warehouse"""
     return warehouse_creation(
         current_account=current_account, warehouse_validation=warehouse_val, db=db
+    )
+
+
+@router.get(
+    "/warehouses/{warehouse_id}/products/{product_id}",
+    dependencies=[Depends(get_current_account)],
+)
+def get_current_inventory_route(
+    warehouse_id: int,
+    product_id: int,
+    db: Session = Depends(get_db),
+):
+    """Get the current inventory of a product in a specific warehouse."""
+    return get_current_inventory(
+        product_id=product_id,
+        warehouse_id=warehouse_id,
+        db=db,
+    )
+
+
+@router.get(
+    "/warehouses/{warehouse_id}/inventory",
+    dependencies=[Depends(get_current_account)],
+)
+def get_warehouse_inventory_route(
+    warehouse_id: int,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """Get the paginated inventory of a warehouse."""
+    return get_warehouse_inventory(
+        warehouse_id=warehouse_id,
+        db=db,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.get(
+    "/warehouses/{warehouse_id}/products/{product_id}/movements",
+    dependencies=[Depends(get_current_account)],
+)
+def get_stock_movements_route(
+    warehouse_id: int,
+    product_id: int,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """Get the stock movements of a specific product in a specific warehouse."""
+    return get_stock_movements(
+        product_id=product_id,
+        warehouse_id=warehouse_id,
+        offset=offset,
+        limit=limit,
+        db=db,
+    )
+
+
+@router.get(
+    "/warehouses/{warehouse_id}/movements",
+    dependencies=[Depends(get_current_account)],
+)
+def get_inventory_movements_by_warehouse_route(
+    warehouse_id: int,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """Get the inventory movements of a specific warehouse."""
+    return get_inventory_movements_by_warehouse(
+        warehouse_id=warehouse_id,
+        db=db,
+        offset=offset,
+        limit=limit,
     )
