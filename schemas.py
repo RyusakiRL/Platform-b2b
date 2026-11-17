@@ -3,7 +3,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, UUID4
+from pydantic import BaseModel, Field, UUID4, ConfigDict
 
 from models.enums import AccountRole, MovementType
 
@@ -70,4 +70,38 @@ class InventoryRequiredColumns(BaseModel):
 
 
 class CardLookup(BaseModel):
+    """Card lookup model for card validation"""
+
     card_number: UUID4
+
+
+class CurrentInventoryResponse(BaseModel):
+    """Response containing a product's stock in a warehouse."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    product_id: int
+    warehouse_id: int
+    product_in_stock: int = Field(ge=0)
+    product_to_come: int = Field(ge=0)
+    created_at: datetime
+    updated_at: datetime
+
+
+class InventoryMovementResponse(BaseModel):
+    """Response containing an inventory movement."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    current_inventory_id: int
+    created_by_account_id: int
+    movement_type: MovementType
+    quantity: int = Field(gt=0)
+    unit_price_at_transaction: Decimal = Field(
+        ge=0,
+        max_digits=12,
+        decimal_places=2,
+    )
+    timestamp: datetime
