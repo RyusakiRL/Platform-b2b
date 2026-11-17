@@ -3,7 +3,13 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from database import get_db
-from schemas import InventoryMovementValidation, ProductValidation, WarehouseValidation
+from schemas import (
+    InventoryMovementValidation,
+    ProductValidation,
+    WarehouseValidation,
+    InventoryMovementResponse,
+    CurrentInventoryResponse,
+)
 from dependencies import get_current_account
 from models.workforce import Account
 from services.inventory_service import (
@@ -62,6 +68,7 @@ def warehouse_creation_route(
 @router.get(
     "/warehouses/{warehouse_id}/products/{product_id}",
     dependencies=[Depends(get_current_account)],
+    response_model=CurrentInventoryResponse,
 )
 def get_current_inventory_route(
     warehouse_id: int,
@@ -79,6 +86,7 @@ def get_current_inventory_route(
 @router.get(
     "/warehouses/{warehouse_id}/inventory",
     dependencies=[Depends(get_current_account)],
+    response_model=list[CurrentInventoryResponse],
 )
 def get_warehouse_inventory_route(
     warehouse_id: int,
@@ -98,6 +106,7 @@ def get_warehouse_inventory_route(
 @router.get(
     "/warehouses/{warehouse_id}/products/{product_id}/movements",
     dependencies=[Depends(get_current_account)],
+    response_model=list[InventoryMovementResponse],
 )
 def get_stock_movements_route(
     warehouse_id: int,
@@ -119,6 +128,7 @@ def get_stock_movements_route(
 @router.get(
     "/warehouses/{warehouse_id}/movements",
     dependencies=[Depends(get_current_account)],
+    response_model=list[InventoryMovementResponse],
 )
 def get_inventory_movements_by_warehouse_route(
     warehouse_id: int,
